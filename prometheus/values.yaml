@@ -1,0 +1,167 @@
+# ============================================================================
+# Prometheus Helm Values (kube-prometheus-stack)
+# Production-ready monitoring configuration
+# ============================================================================
+
+# --------------- Global ---------------
+fullnameOverride: monitoring
+
+# --------------- Prometheus ---------------
+prometheus:
+  enabled: true
+  prometheusSpec:
+    replicas: 1
+    retention: 30d
+    retentionSize: "15GB"
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    walCompression: true
+
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: "2"
+        memory: 4Gi
+
+    # Service discovery
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+    # Additional scrape configs
+    additionalScrapeConfigs:
+      - job_name: "node-exporter-external"
+        static_configs:
+          - targets:
+              - "192.168.1.10:9100"
+              - "192.168.1.11:9100"
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: instance
+
+# --------------- Grafana ---------------
+grafana:
+  enabled: true
+  adminUser: admin
+  adminPassword: changeme
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - grafana.homelab.local
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - grafana.homelab.local
+
+  persistence:
+    enabled: true
+    size: 5Gi
+
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+  dashboards:
+    default:
+      node-exporter:
+        gnetId: 1860
+        revision: 33
+        datasource: Prometheus
+      kubernetes-cluster:
+        gnetId: 7249
+        revision: 1
+        datasource: Prometheus
+      nginx-ingress:
+        gnetId: 9614
+        revision: 1
+        datasource: Prometheus
+      argocd:
+        gnetId: 14584
+        revision: 1
+        datasource: Prometheus
+
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+    datasources:
+      enabled: true
+      searchNamespace: ALL
+
+# --------------- Alertmanager ---------------
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      group_by: ["alertname", "namespace"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      receiver: "null"
+      routes:
+        - match:
+            severity: critical
+          receiver: "null"
+    receivers:
+      - name: "null"
+
+# --------------- Node Exporter ---------------
+nodeExporter:
+  enabled: true
+
+# --------------- Kube State Metrics ---------------
+kubeStateMetrics:
+  enabled: true
+
+# --------------- Default Rules ---------------
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: true
+    general: true
+    k8s: true
+    kubeApiserverAvailability: true
+    kubePrometheusNodeRecording: true
+    kubernetesApps: true
+    kubernetesResources: true
+    kubernetesStorage: true
+    kubernetesSystem: true
+    node: true
+    prometheus: true
