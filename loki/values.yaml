@@ -1,0 +1,99 @@
+# ============================================================================
+# Loki + Promtail Helm Values
+# Log aggregation for Kubernetes
+# ============================================================================
+
+# --------------- Loki ---------------
+loki:
+  enabled: true
+  isDefault: true
+  persistence:
+    enabled: true
+    size: 10Gi
+  config:
+    auth_enabled: false
+    server:
+      http_listen_port: 3100
+    common:
+      path_prefix: /loki
+      storage:
+        filesystem:
+          chunks_directory: /loki/chunks
+          rules_directory: /loki/rules
+      replication_factor: 1
+      ring:
+        kvstore:
+          store: inmemory
+    limits_config:
+      retention_period: 720h  # 30 days
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      max_cache_freshness_per_query: 10m
+      ingestion_rate_mb: 10
+      ingestion_burst_size_mb: 20
+    schema_config:
+      configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+    compactor:
+      working_directory: /loki/compactor
+      compaction_interval: 10m
+      retention_enabled: true
+      retention_delete_delay: 2h
+    analytics:
+      reporting_enabled: false
+
+# --------------- Promtail ---------------
+promtail:
+  enabled: true
+  config:
+    logLevel: info
+    clients:
+      - url: http://loki:3100/loki/api/v1/push
+    positions:
+      filename: /run/promtail/positions.yaml
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        pipeline_stages:
+          - cri: {}
+          - json:
+              expressions:
+                level: level
+                msg: msg
+          - labels:
+              level:
+        relabel_configs:
+          - source_labels:
+              - __meta_kubernetes_pod_controller_name
+            target_label: __service__
+          - source_labels:
+              - __meta_kubernetes_pod_label_app_kubernetes_io_name
+            target_label: app
+          - source_labels:
+              - __meta_kubernetes_namespace
+            target_label: namespace
+          - source_labels:
+              - __meta_kubernetes_pod_name
+            target_label: pod
+
+# --------------- Grafana Datasource ---------------
+grafana:
+  sidecar:
+    datasources:
+      enabled: true
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki:3100
+      access: proxy
+      isDefault: false
+      jsonData:
+        maxLines: 1000
