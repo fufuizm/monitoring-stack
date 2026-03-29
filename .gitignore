@@ -1,0 +1,21 @@
+# Helm
+charts/
+*.tgz
+Chart.lock
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Secrets
+secrets/
+*.enc.yaml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
